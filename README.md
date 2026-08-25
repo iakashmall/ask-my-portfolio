@@ -13,10 +13,11 @@ its sources, using the same architecture pattern used in production LLM apps.
 
 ```
 docs/*.md  →  chunk (LangChain RecursiveCharacterTextSplitter)
+           →  prepend source/project name to each chunk (fixes named-entity retrieval)
            →  embed (sentence-transformers, all-MiniLM-L6-v2, local, free)
            →  index (FAISS vector store, local)
            →  retrieve top-k relevant chunks for a query
-           →  generate (Claude, answer constrained to retrieved context only)
+           →  generate (Llama 3.2 via Ollama, local, free — answer constrained to retrieved context only)
 ```
 
 ## Stack
@@ -58,24 +59,30 @@ retrieval quality is inspectable, not a black box.
 ## Example
 
 ```
-$ python query.py "What MAPE did the DILLI-GRID project achieve?"
+$ python query.py "What MAPE did DILLI-GRID achieve?"
 
-Q: What MAPE did the DILLI-GRID project achieve?
-A: The DILLI-GRID project achieved 2.89% MAPE (R² 0.975) after fixing
-   tree-model extrapolation via a relative-target formulation, cutting
-   peak-hour error from 5.46% to 2.41%.
+Q: What MAPE did DILLI-GRID achieve?
+A: The MAPE (Mean Absolute Percentage Error) achieved by DILLI-GRID is 2.89%.
 
-(retrieved 3 chunks in 0.41s)
+(retrieved 5 chunks in 3.77s)
   [1] docs/DILLI-GRID-Delhi-Electricity-Load-Forecasting.md
   [2] docs/DILLI-GRID-Delhi-Electricity-Load-Forecasting.md
-  [3] docs/iex-price-forecasting.md
+  [3] docs/DILLI-GRID-Delhi-Electricity-Load-Forecasting.md
+  [4] docs/DILLI-GRID-Delhi-Electricity-Load-Forecasting.md
+  [5] docs/DILLI-GRID-Delhi-Electricity-Load-Forecasting.md
 ```
 
 ## Notes / next steps
 
+- **Debugged a real retrieval-ranking failure**: the correct chunk (a results
+  table with the MAPE figure) never appeared in the top-3 results, because the
+  chunk text never mentioned "DILLI-GRID" by name — only the source file did.
+  A small embedding model matches heavily on literal word overlap, so a query
+  naming the project failed to surface it. Fixed by prepending each chunk with
+  `[Project: <name>]` before embedding, so the project name becomes part of
+  what gets matched — verified by re-running the same query before and after.
 - Swap `docs/*.md` for any corpus — internal wikis, contracts, support docs —
   the pipeline is corpus-agnostic.
 - `k` (chunks retrieved) and `chunk_size`/`chunk_overlap` are tunable in
   `ingest.py` / `query.py` for retrieval-quality experiments.
 - Could be extended with a re-ranking step or a Streamlit UI.
-Diagnosed a retrieval-ranking failure where source project names weren't part of chunk text, causing relevant chunks (e.g. a results table) to rank below unrelated ones for named-entity queries. Fixed by prepending project context to each chunk before embedding.
